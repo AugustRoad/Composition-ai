@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="camera_bg">#1A1C1E</color>
+    <color name="control_bg">#80000000</color>
+    <color name="mode_selected">#EADDFF</color>
+</resources>
