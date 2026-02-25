@@ -44,6 +44,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.hardware.camera2.CaptureRequest
+import androidx.camera.camera2.interop.Camera2CameraControl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -75,6 +77,9 @@ private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnal
 class MainActivity : AppCompatActivity() {
     enum class Mode { PORTRAIT, PHOTO, VIDEO, PRO }
     private var currentMode = Mode.PHOTO
+
+    enum class ProParameter { NONE, ISO, SHUTTER_SPEED, WB, MF, EV }
+    private var currentProParameter = ProParameter.NONE
 
     private lateinit var viewBinding: ActivityMainBinding
 
@@ -117,6 +122,7 @@ class MainActivity : AppCompatActivity() {
             viewBinding.overlayImage.visibility = android.view.View.GONE
             viewBinding.overlayOpacitySlider.visibility = android.view.View.GONE
             viewBinding.switchEdgeDetection.visibility = android.view.View.GONE
+            viewBinding.switchFlipOverlay.visibility = android.view.View.GONE
         }
     }
 
@@ -137,6 +143,7 @@ class MainActivity : AppCompatActivity() {
                         viewBinding.overlayImage.visibility = android.view.View.VISIBLE
                         viewBinding.overlayOpacitySlider.visibility = android.view.View.VISIBLE
                         viewBinding.switchEdgeDetection.visibility = android.view.View.VISIBLE
+                        viewBinding.switchFlipOverlay.visibility = android.view.View.VISIBLE
                     }
                 }
             } catch (e: Exception) {
@@ -280,11 +287,28 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "AI Mode toggled", Toast.LENGTH_SHORT).show()
         }
 
+        viewBinding.proBtnIso.setOnClickListener { selectProParameter(ProParameter.ISO) }
+        viewBinding.proBtnS.setOnClickListener { selectProParameter(ProParameter.SHUTTER_SPEED) }
+        viewBinding.proBtnWb.setOnClickListener { selectProParameter(ProParameter.WB) }
+        viewBinding.proBtnMf.setOnClickListener { selectProParameter(ProParameter.MF) }
+        viewBinding.proBtnEv.setOnClickListener { selectProParameter(ProParameter.EV) }
+
+        viewBinding.proBtnAuto.setOnClickListener {
+            if (currentProParameter != ProParameter.NONE) {
+                setProParameterToAuto(currentProParameter)
+            }
+        }
+
+        viewBinding.proSlider.addOnChangeListener { _, value, _ ->
+            updateProParameterValue(value)
+        }
+
         viewBinding.btnOverlayToggle.setOnClickListener {
             if (viewBinding.overlayImage.visibility == android.view.View.VISIBLE) {
                 viewBinding.overlayImage.visibility = android.view.View.GONE
                 viewBinding.overlayOpacitySlider.visibility = android.view.View.GONE
                 viewBinding.switchEdgeDetection.visibility = android.view.View.GONE
+                viewBinding.switchFlipOverlay.visibility = android.view.View.GONE
             } else {
                 pickImageLauncher.launch("image/*")
             }
@@ -296,6 +320,29 @@ class MainActivity : AppCompatActivity() {
 
         viewBinding.switchEdgeDetection.setOnCheckedChangeListener { _, _ ->
             updateOverlayImage()
+        }
+
+        viewBinding.switchFlipOverlay.setOnCheckedChangeListener { _, isChecked ->
+            viewBinding.overlayImage.scaleX = if (isChecked) -1f else 1f
+        }
+
+        viewBinding.btnSettings.setOnClickListener {
+            viewBinding.settingsMenu.visibility = if (viewBinding.settingsMenu.visibility == android.view.View.VISIBLE) {
+                android.view.View.GONE
+            } else {
+                android.view.View.VISIBLE
+            }
+        }
+
+        viewBinding.switchGrid.setOnCheckedChangeListener { _, isChecked ->
+            viewBinding.gridOverlay.visibility = if (isChecked) android.view.View.VISIBLE else android.view.View.GONE
+        }
+
+        viewBinding.switchMirrorFront.setOnCheckedChangeListener { _, _ ->
+            // Rebind camera to apply mirror setting if we are currently on the front camera
+            if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                startCamera()
+            }
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -317,11 +364,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Create output options object which contains file + metadata
-        val outputOptions = ImageCapture.OutputFileOptions
+        val outputOptionsBuilder = ImageCapture.OutputFileOptions
             .Builder(contentResolver,
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 contentValues)
-            .build()
+
+        // Apply mirror setting if using front camera
+        if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA && viewBinding.switchMirrorFront.isChecked) {
+            val metadata = ImageCapture.Metadata()
+            metadata.isReversedHorizontal = true
+            outputOptionsBuilder.setMetadata(metadata)
+        }
+
+        val outputOptions = outputOptionsBuilder.build()
 
         // Set up image capture listener, which is triggered after photo has
         // been taken
@@ -452,6 +507,220 @@ class MainActivity : AppCompatActivity() {
             setBackgroundResource(R.drawable.bg_mode_selected)
             setTextColor(selectedColor)
             typeface = Typeface.DEFAULT_BOLD
+        }
+
+        if (mode == Mode.PRO) {
+            viewBinding.proControlsContainer.visibility = android.view.View.VISIBLE
+            viewBinding.levelLineLeft.visibility = android.view.View.VISIBLE
+            viewBinding.levelCenter.visibility = android.view.View.VISIBLE
+            viewBinding.levelLineRight.visibility = android.view.View.VISIBLE
+            viewBinding.focusSquare.visibility = android.view.View.VISIBLE
+            viewBinding.zoomControls.visibility = android.view.View.GONE
+        } else {
+            viewBinding.proControlsContainer.visibility = android.view.View.GONE
+            viewBinding.levelLineLeft.visibility = android.view.View.GONE
+            viewBinding.levelCenter.visibility = android.view.View.GONE
+            viewBinding.levelLineRight.visibility = android.view.View.GONE
+            viewBinding.focusSquare.visibility = android.view.View.GONE
+            viewBinding.zoomControls.visibility = android.view.View.VISIBLE
+            resetAllProParametersToAuto()
+        }
+    }
+
+    private fun selectProParameter(param: ProParameter) {
+        if (currentProParameter == param) {
+            currentProParameter = ProParameter.NONE
+            viewBinding.proSliderContainer.visibility = android.view.View.GONE
+            resetProParameterStyles()
+            return
+        }
+
+        currentProParameter = param
+        viewBinding.proSliderContainer.visibility = android.view.View.VISIBLE
+        resetProParameterStyles()
+
+        val selectedColor = Color.parseColor("#FFD700")
+        
+        when (param) {
+            ProParameter.ISO -> {
+                viewBinding.proLblIso.setTextColor(selectedColor)
+                viewBinding.proValIso.setTextColor(selectedColor)
+                viewBinding.proSliderLabel.text = "ISO"
+                viewBinding.proSlider.valueFrom = 100f
+                viewBinding.proSlider.valueTo = 3200f
+                viewBinding.proSlider.stepSize = 100f
+                val currentVal = viewBinding.proValIso.text.toString()
+                viewBinding.proSlider.value = if (currentVal == "AUTO") 100f else currentVal.toFloatOrNull() ?: 100f
+            }
+            ProParameter.SHUTTER_SPEED -> {
+                viewBinding.proLblS.setTextColor(selectedColor)
+                viewBinding.proValS.setTextColor(selectedColor)
+                viewBinding.proSliderLabel.text = "SHUTTER SPEED"
+                viewBinding.proSlider.valueFrom = 1f
+                viewBinding.proSlider.valueTo = 1000f
+                viewBinding.proSlider.stepSize = 1f
+                val currentVal = viewBinding.proValS.text.toString().removePrefix("1/")
+                viewBinding.proSlider.value = if (currentVal == "AUTO") 500f else currentVal.toFloatOrNull() ?: 500f
+            }
+            ProParameter.WB -> {
+                viewBinding.proLblWb.setTextColor(selectedColor)
+                viewBinding.proValWb.setTextColor(selectedColor)
+                viewBinding.proSliderLabel.text = "WHITE BALANCE"
+                viewBinding.proSlider.valueFrom = 2000f
+                viewBinding.proSlider.valueTo = 8000f
+                viewBinding.proSlider.stepSize = 100f
+                val currentVal = viewBinding.proValWb.text.toString().removeSuffix("K")
+                viewBinding.proSlider.value = if (currentVal == "AUTO") 5500f else currentVal.toFloatOrNull() ?: 5500f
+            }
+            ProParameter.MF -> {
+                viewBinding.proLblMf.setTextColor(selectedColor)
+                viewBinding.proValMf.setTextColor(selectedColor)
+                viewBinding.proSliderLabel.text = "MANUAL FOCUS"
+                viewBinding.proSlider.valueFrom = 0f
+                viewBinding.proSlider.valueTo = 10f
+                viewBinding.proSlider.stepSize = 0.1f
+                val currentVal = viewBinding.proValMf.text.toString()
+                viewBinding.proSlider.value = when (currentVal) {
+                    "AUTO" -> 0f
+                    "∞" -> 0f
+                    else -> currentVal.toFloatOrNull() ?: 0f
+                }
+            }
+            ProParameter.EV -> {
+                viewBinding.proLblEv.setTextColor(selectedColor)
+                viewBinding.proValEv.setTextColor(selectedColor)
+                viewBinding.proSliderLabel.text = "EXPOSURE COMPENSATION"
+                viewBinding.proSlider.valueFrom = -2f
+                viewBinding.proSlider.valueTo = 2f
+                viewBinding.proSlider.stepSize = 0.1f
+                val currentVal = viewBinding.proValEv.text.toString()
+                viewBinding.proSlider.value = currentVal.toFloatOrNull() ?: 0f
+            }
+            else -> {}
+        }
+        updateProParameterValue(viewBinding.proSlider.value)
+    }
+
+    private fun resetProParameterStyles() {
+        val unselectedLblColor = Color.parseColor("#B3FFFFFF")
+        val unselectedValColor = Color.WHITE
+
+        viewBinding.proLblIso.setTextColor(unselectedLblColor)
+        if (viewBinding.proValIso.text != "AUTO") viewBinding.proValIso.setTextColor(unselectedValColor)
+        viewBinding.proLblS.setTextColor(unselectedLblColor)
+        if (viewBinding.proValS.text != "AUTO") viewBinding.proValS.setTextColor(unselectedValColor)
+        viewBinding.proLblWb.setTextColor(unselectedLblColor)
+        if (viewBinding.proValWb.text != "AUTO") viewBinding.proValWb.setTextColor(unselectedValColor)
+        viewBinding.proLblMf.setTextColor(unselectedLblColor)
+        if (viewBinding.proValMf.text != "AUTO") viewBinding.proValMf.setTextColor(unselectedValColor)
+        viewBinding.proLblEv.setTextColor(unselectedLblColor)
+        if (viewBinding.proValEv.text != "0.0") viewBinding.proValEv.setTextColor(unselectedValColor)
+    }
+
+    private fun setProParameterToAuto(param: ProParameter) {
+        val cameraControl = camera?.cameraControl ?: return
+        val camera2Control = Camera2CameraControl.from(cameraControl)
+
+        when (param) {
+            ProParameter.ISO, ProParameter.SHUTTER_SPEED -> {
+                if (param == ProParameter.ISO) viewBinding.proValIso.text = "AUTO"
+                if (param == ProParameter.SHUTTER_SPEED) viewBinding.proValS.text = "AUTO"
+                
+                camera2Control.captureRequestOptions = androidx.camera.camera2.interop.CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                    .build()
+            }
+            ProParameter.WB -> {
+                viewBinding.proValWb.text = "AUTO"
+                camera2Control.captureRequestOptions = androidx.camera.camera2.interop.CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+                    .build()
+            }
+            ProParameter.MF -> {
+                viewBinding.proValMf.text = "AUTO"
+                camera2Control.captureRequestOptions = androidx.camera.camera2.interop.CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                    .build()
+            }
+            ProParameter.EV -> {
+                viewBinding.proValEv.text = "0.0"
+                cameraControl.setExposureCompensationIndex(0)
+            }
+            else -> {}
+        }
+        
+        if (currentProParameter == param) {
+            viewBinding.proSliderContainer.visibility = android.view.View.GONE
+            currentProParameter = ProParameter.NONE
+            resetProParameterStyles()
+        }
+    }
+
+    private fun resetAllProParametersToAuto() {
+        setProParameterToAuto(ProParameter.ISO)
+        setProParameterToAuto(ProParameter.SHUTTER_SPEED)
+        setProParameterToAuto(ProParameter.WB)
+        setProParameterToAuto(ProParameter.MF)
+        setProParameterToAuto(ProParameter.EV)
+    }
+
+    private fun updateProParameterValue(value: Float) {
+        val cameraControl = camera?.cameraControl ?: return
+        val camera2Control = Camera2CameraControl.from(cameraControl)
+
+        when (currentProParameter) {
+            ProParameter.ISO -> {
+                val iso = value.toInt()
+                viewBinding.proValIso.text = iso.toString()
+                viewBinding.proSliderValue.text = iso.toString()
+                
+                camera2Control.captureRequestOptions = androidx.camera.camera2.interop.CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                    .setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, iso)
+                    .build()
+            }
+            ProParameter.SHUTTER_SPEED -> {
+                val speed = value.toInt()
+                val text = "1/$speed"
+                viewBinding.proValS.text = text
+                viewBinding.proSliderValue.text = text
+                
+                // Convert to nanoseconds
+                val exposureTimeNs = 1_000_000_000L / speed
+                camera2Control.captureRequestOptions = androidx.camera.camera2.interop.CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                    .setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTimeNs)
+                    .build()
+            }
+            ProParameter.WB -> {
+                val wb = value.toInt()
+                val text = "${wb}K"
+                viewBinding.proValWb.text = text
+                viewBinding.proSliderValue.text = text
+                
+                // Note: Camera2 API doesn't directly support setting color temperature in Kelvin easily without color correction transforms.
+                // For simplicity in this demo, we just update the UI.
+            }
+            ProParameter.MF -> {
+                val text = if (value == 0f) "∞" else String.format("%.1f", value)
+                viewBinding.proValMf.text = text
+                viewBinding.proSliderValue.text = text
+                
+                camera2Control.captureRequestOptions = androidx.camera.camera2.interop.CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+                    .setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, value)
+                    .build()
+            }
+            ProParameter.EV -> {
+                val text = if (value > 0) "+${String.format("%.1f", value)}" else String.format("%.1f", value)
+                viewBinding.proValEv.text = text
+                viewBinding.proSliderValue.text = text
+                
+                // EV is supported directly by CameraX
+                val evIndex = (value * 2).toInt() // Assuming step is 0.5
+                cameraControl.setExposureCompensationIndex(evIndex)
+            }
+            else -> {}
         }
     }
 

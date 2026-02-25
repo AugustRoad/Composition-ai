@@ -9,53 +9,65 @@
 
     <!-- Top Bar -->
     <ImageButton
-        android:id="@+id/btn_settings"
+        android:id="@+id/btn_flash"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_marginStart="16dp"
         android:layout_marginTop="16dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@android:drawable/ic_menu_preferences"
+        android:background="@drawable/bg_icon_circle"
+        android:src="@android:drawable/ic_menu_camera"
         app:tint="@android:color/white"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <ImageButton
-        android:id="@+id/btn_flash"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@android:drawable/ic_menu_camera"
-        app:tint="@android:color/white"
-        app:layout_constraintEnd_toStartOf="@+id/btn_timer"
-        app:layout_constraintHorizontal_chainStyle="packed"
-        app:layout_constraintStart_toEndOf="@+id/btn_settings"
-        app:layout_constraintTop_toTopOf="@+id/btn_settings" />
-
-    <ImageButton
-        android:id="@+id/btn_timer"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="32dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@android:drawable/ic_menu_recent_history"
-        app:tint="@android:color/white"
-        app:layout_constraintEnd_toStartOf="@+id/tv_aspect_ratio"
-        app:layout_constraintStart_toEndOf="@+id/btn_flash"
-        app:layout_constraintTop_toTopOf="@+id/btn_settings" />
-
-    <TextView
-        android:id="@+id/tv_aspect_ratio"
+        android:id="@+id/btn_settings"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_marginEnd="16dp"
-        android:gravity="center"
-        android:text="4:3"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_icon_circle"
+        android:src="@android:drawable/ic_menu_preferences"
+        app:tint="@android:color/white"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/btn_settings" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Settings Menu -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/settings_menu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#CC000000"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_settings">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switch_grid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Grid View"
+                android:textColor="@android:color/white" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switch_mirror_front"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Mirror Front Camera"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Camera Preview -->
     <androidx.camera.view.PreviewView
@@ -69,6 +81,94 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/btn_settings" />
+
+    <!-- Grid Overlay -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/grid_overlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@+id/camera_preview"
+        app:layout_constraintBottom_toBottomOf="@+id/camera_preview"
+        app:layout_constraintStart_toStartOf="@+id/camera_preview"
+        app:layout_constraintEnd_toEndOf="@+id/camera_preview">
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="#80FFFFFF"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.333" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="#80FFFFFF"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.666" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#80FFFFFF"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintVertical_bias="0.333" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#80FFFFFF"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintVertical_bias="0.666" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Level Indicator -->
+    <View
+        android:id="@+id/level_line_left"
+        android:layout_width="100dp"
+        android:layout_height="1dp"
+        android:background="#FFD700"
+        android:visibility="gone"
+        app:layout_constraintEnd_toStartOf="@+id/level_center"
+        app:layout_constraintTop_toTopOf="@+id/camera_preview"
+        app:layout_constraintBottom_toBottomOf="@+id/camera_preview" />
+
+    <View
+        android:id="@+id/level_center"
+        android:layout_width="2dp"
+        android:layout_height="10dp"
+        android:background="#FFD700"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@+id/camera_preview"
+        app:layout_constraintEnd_toEndOf="@+id/camera_preview"
+        app:layout_constraintTop_toTopOf="@+id/camera_preview"
+        app:layout_constraintBottom_toBottomOf="@+id/camera_preview" />
+
+    <View
+        android:id="@+id/level_line_right"
+        android:layout_width="100dp"
+        android:layout_height="1dp"
+        android:background="#FFD700"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@+id/level_center"
+        app:layout_constraintTop_toTopOf="@+id/camera_preview"
+        app:layout_constraintBottom_toBottomOf="@+id/camera_preview" />
+
+    <!-- Focus Square -->
+    <View
+        android:id="@+id/focus_square"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:background="@drawable/bg_focus_square"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@+id/camera_preview"
+        app:layout_constraintEnd_toEndOf="@+id/camera_preview"
+        app:layout_constraintTop_toTopOf="@+id/camera_preview"
+        app:layout_constraintBottom_toBottomOf="@+id/camera_preview" />
 
     <!-- Overlay Image -->
     <ImageView
@@ -112,6 +212,230 @@
         app:layout_constraintBottom_toTopOf="@+id/overlay_opacity_slider"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Flip Overlay Toggle -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_flip_overlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="Flip"
+        android:textColor="@android:color/white"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/overlay_opacity_slider"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Pro Controls -->
+    <LinearLayout
+        android:id="@+id/pro_controls_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:background="#80000000"
+        app:layout_constraintBottom_toTopOf="@+id/modes_container">
+
+        <!-- Slider for selected parameter -->
+        <LinearLayout
+            android:id="@+id/pro_slider_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+            
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                
+                <TextView
+                    android:id="@+id/pro_slider_label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="#FFD700"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1" />
+                    
+                <TextView
+                    android:id="@+id/pro_btn_auto"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AUTO"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="4dp"
+                    android:background="@drawable/bg_icon_circle"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/pro_slider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:thumbColor="#FFD700"
+                app:trackColorActive="#FFD700"
+                app:trackColorInactive="#80FFFFFF"
+                app:tickVisible="true"
+                app:tickColorActive="#FFD700"
+                app:tickColorInactive="#80FFFFFF" />
+                
+            <TextView
+                android:id="@+id/pro_slider_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:textColor="#FFD700"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Parameter Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingVertical="12dp"
+            android:weightSum="5">
+
+            <!-- ISO -->
+            <LinearLayout
+                android:id="@+id/pro_btn_iso"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true">
+                <TextView
+                    android:id="@+id/pro_lbl_iso"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ISO"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/pro_val_iso"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AUTO"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- S (Shutter Speed) -->
+            <LinearLayout
+                android:id="@+id/pro_btn_s"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true">
+                <TextView
+                    android:id="@+id/pro_lbl_s"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="S"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/pro_val_s"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AUTO"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- WB -->
+            <LinearLayout
+                android:id="@+id/pro_btn_wb"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true">
+                <TextView
+                    android:id="@+id/pro_lbl_wb"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="WB"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/pro_val_wb"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AUTO"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- MF -->
+            <LinearLayout
+                android:id="@+id/pro_btn_mf"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true">
+                <TextView
+                    android:id="@+id/pro_lbl_mf"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="MF"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/pro_val_mf"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AUTO"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- EV -->
+            <LinearLayout
+                android:id="@+id/pro_btn_ev"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true">
+                <TextView
+                    android:id="@+id/pro_lbl_ev"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="EV"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/pro_val_ev"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0.0"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- Zoom Controls -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/zoom_controls"
@@ -122,7 +446,7 @@
         app:cardCornerRadius="24dp"
         app:cardElevation="0dp"
         app:strokeWidth="0dp"
-        app:layout_constraintBottom_toBottomOf="@+id/camera_preview"
+        app:layout_constraintBottom_toTopOf="@+id/pro_controls_container"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
