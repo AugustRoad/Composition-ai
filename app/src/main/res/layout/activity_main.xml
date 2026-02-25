@@ -70,6 +70,48 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/btn_settings" />
 
+    <!-- Overlay Image -->
+    <ImageView
+        android:id="@+id/overlay_image"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerCrop"
+        android:alpha="0.5"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/camera_preview"
+        app:layout_constraintEnd_toEndOf="@+id/camera_preview"
+        app:layout_constraintStart_toStartOf="@+id/camera_preview"
+        app:layout_constraintTop_toTopOf="@+id/camera_preview" />
+
+    <!-- Overlay Opacity Slider -->
+    <com.google.android.material.slider.Slider
+        android:id="@+id/overlay_opacity_slider"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="16dp"
+        android:valueFrom="0.0"
+        android:valueTo="1.0"
+        android:value="0.5"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/zoom_controls"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Edge Detection Toggle -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_edge_detection"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="Edges Only"
+        android:textColor="@android:color/white"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/overlay_opacity_slider"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- Zoom Controls -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/zoom_controls"

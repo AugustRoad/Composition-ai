@@ -39,6 +39,16 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.net.Uri
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 typealias LumaListener = (luma: Double) -> Unit
 
 private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
@@ -96,6 +106,120 @@ class MainActivity : AppCompatActivity() {
                 startCamera()
             }
         }
+
+    private var originalOverlayBitmap: Bitmap? = null
+    private var edgeOverlayBitmap: Bitmap? = null
+
+    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            loadAndProcessImage(uri)
+        } else {
+            viewBinding.overlayImage.visibility = android.view.View.GONE
+            viewBinding.overlayOpacitySlider.visibility = android.view.View.GONE
+            viewBinding.switchEdgeDetection.visibility = android.view.View.GONE
+        }
+    }
+
+    private fun loadAndProcessImage(uri: Uri) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val inputStream = contentResolver.openInputStream(uri)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+
+                if (bitmap != null) {
+                    val rotatedBitmap = rotateImageIfRequired(bitmap, uri)
+                    originalOverlayBitmap = rotatedBitmap
+                    edgeOverlayBitmap = applyEdgeDetection(rotatedBitmap)
+
+                    withContext(Dispatchers.Main) {
+                        updateOverlayImage()
+                        viewBinding.overlayImage.visibility = android.view.View.VISIBLE
+                        viewBinding.overlayOpacitySlider.visibility = android.view.View.VISIBLE
+                        viewBinding.switchEdgeDetection.visibility = android.view.View.VISIBLE
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading image", e)
+            }
+        }
+    }
+
+    private fun rotateImageIfRequired(bitmap: Bitmap, uri: Uri): Bitmap {
+        val inputStream = contentResolver.openInputStream(uri) ?: return bitmap
+        val exif = ExifInterface(inputStream)
+        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        inputStream.close()
+
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            else -> return bitmap
+        }
+
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun updateOverlayImage() {
+        if (viewBinding.switchEdgeDetection.isChecked) {
+            viewBinding.overlayImage.setImageBitmap(edgeOverlayBitmap)
+        } else {
+            viewBinding.overlayImage.setImageBitmap(originalOverlayBitmap)
+        }
+    }
+
+    private fun applyEdgeDetection(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val edgeBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val edgePixels = IntArray(width * height)
+
+        // Simple Sobel operator
+        val gx = arrayOf(
+            intArrayOf(-1, 0, 1),
+            intArrayOf(-2, 0, 2),
+            intArrayOf(-1, 0, 1)
+        )
+        val gy = arrayOf(
+            intArrayOf(-1, -2, -1),
+            intArrayOf(0, 0, 0),
+            intArrayOf(1, 2, 1)
+        )
+
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                var sumX = 0
+                var sumY = 0
+
+                for (i in -1..1) {
+                    for (j in -1..1) {
+                        val pixel = pixels[(y + i) * width + (x + j)]
+                        val r = Color.red(pixel)
+                        val g = Color.green(pixel)
+                        val b = Color.blue(pixel)
+                        val gray = (r * 0.299 + g * 0.587 + b * 0.114).toInt()
+
+                        sumX += gray * gx[i + 1][j + 1]
+                        sumY += gray * gy[i + 1][j + 1]
+                    }
+                }
+
+                val magnitude = Math.sqrt((sumX * sumX + sumY * sumY).toDouble()).toInt()
+                val edgeColor = if (magnitude > 128) Color.WHITE else Color.TRANSPARENT
+                edgePixels[y * width + x] = edgeColor
+            }
+        }
+
+        edgeBitmap.setPixels(edgePixels, 0, width, 0, 0, width, height)
+        return edgeBitmap
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
@@ -157,7 +281,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewBinding.btnOverlayToggle.setOnClickListener {
-            Toast.makeText(this, "Overlay toggled", Toast.LENGTH_SHORT).show()
+            if (viewBinding.overlayImage.visibility == android.view.View.VISIBLE) {
+                viewBinding.overlayImage.visibility = android.view.View.GONE
+                viewBinding.overlayOpacitySlider.visibility = android.view.View.GONE
+                viewBinding.switchEdgeDetection.visibility = android.view.View.GONE
+            } else {
+                pickImageLauncher.launch("image/*")
+            }
+        }
+
+        viewBinding.overlayOpacitySlider.addOnChangeListener { _, value, _ ->
+            viewBinding.overlayImage.alpha = value
+        }
+
+        viewBinding.switchEdgeDetection.setOnCheckedChangeListener { _, _ ->
+            updateOverlayImage()
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
