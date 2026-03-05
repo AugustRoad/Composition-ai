@@ -50,6 +50,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
 
 typealias LumaListener = (luma: Double) -> Unit
 
@@ -92,6 +103,14 @@ class MainActivity : AppCompatActivity() {
     private var flashMode = ImageCapture.FLASH_MODE_OFF
 
     private lateinit var cameraExecutor: ExecutorService
+
+    // AI Mode fields
+    private var isAiMode = false
+    private var lastFrameTime = 0L
+    private var latestAiFrameBase64: String? = null
+    private val httpClient = OkHttpClient()
+    private val agentEndpoint = "http://10.0.2.2:8000/api/v1/invoke" // Localhost emulator forward
+
 
     private val activityResultLauncher =
         registerForActivityResult(
@@ -284,7 +303,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewBinding.btnAiMode.setOnClickListener {
-            Toast.makeText(this, "AI Mode toggled", Toast.LENGTH_SHORT).show()
+            isAiMode = !isAiMode
+            if (isAiMode) {
+                viewBinding.aiModeOverlay.visibility = android.view.View.VISIBLE
+                Toast.makeText(this, "AI Agent Mode ON", Toast.LENGTH_SHORT).show()
+                startCamera() // Restart camera to bind ImageAnalysis
+            } else {
+                viewBinding.aiModeOverlay.visibility = android.view.View.GONE
+                Toast.makeText(this, "AI Agent Mode OFF", Toast.LENGTH_SHORT).show()
+                startCamera() // Restart camera without ImageAnalysis to save battery
+            }
+        }
+
+        viewBinding.btnAiSend.setOnClickListener {
+            sendPromptToAgent()
         }
 
         viewBinding.proBtnIso.setOnClickListener { selectProParameter(ProParameter.ISO) }
@@ -724,6 +756,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun sendPromptToAgent() {
+        val promptText = viewBinding.etAiPrompt.text.toString()
+        if (promptText.isBlank()) return
+        
+        val frameData = latestAiFrameBase64
+        if (frameData == null) {
+            Toast.makeText(this, "No video frame captured yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        viewBinding.tvAiResponse.text = "Agent says: Thinking..."
+        viewBinding.etAiPrompt.text.clear()
+
+        // Build mock ADK JSON payload to the OrchestratorAgent
+        // Depending on exact ADK schema, this might change.
+        val jsonPayload = JSONObject().apply {
+            put("message", promptText)
+            put("video_frame", frameData)
+        }
+
+        val body = jsonPayload.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url(agentEndpoint)
+            .post(body)
+            .build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    viewBinding.tvAiResponse.text = "Error: ${e.message}"
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val responseBody = response.body?.string() ?: "{}"
+                runOnUiThread {
+                    try {
+                        val obj = JSONObject(responseBody)
+                        val textReply = obj.optString("response", "No response parsed.")
+                        viewBinding.tvAiResponse.text = "Agent says: $textReply"
+                    } catch (e: Exception) {
+                        viewBinding.tvAiResponse.text = "Agent says: $responseBody"
+                    }
+                }
+            }
+        })
+    }
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
@@ -747,21 +827,49 @@ class MainActivity : AppCompatActivity() {
                 .build()
             videoCapture = VideoCapture.withOutput(recorder)
 
-//            val imageAnalyzer = ImageAnalysis.Builder()
-//                .build()
-//                .also {
-//                    it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-//                        Log.d(TAG, "Average luminosity: $luma")
-//                    })
-//                }
+            var imageAnalyzer: ImageAnalysis? = null
+            if (isAiMode) {
+                imageAnalyzer = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                    .also {
+                        it.setAnalyzer(cameraExecutor, { image ->
+                            // Only process roughly 1 frame per second to avoid overload
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastFrameTime >= 1000) {
+                                lastFrameTime = currentTime
+                                
+                                val rawBitmap = image.toBitmap()
+                                
+                                // Rotate bitmap based on image info
+                                val matrix = Matrix().apply { postRotate(image.imageInfo.rotationDegrees.toFloat()) }
+                                val rotatedBitmap = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                                
+                                val outputStream = ByteArrayOutputStream()
+                                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+                                val base64Str = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+                                
+                                runOnUiThread {
+                                    latestAiFrameBase64 = base64Str
+                                }
+                            }
+                            image.close()
+                        })
+                    }
+            }
 
             try {
                 // Unbind use cases before rebinding
                 cameraProvider.unbindAll()
 
                 // Bind use cases to camera
-                camera = cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageCapture, videoCapture)
+                if (isAiMode && imageAnalyzer != null) {
+                    camera = cameraProvider.bindToLifecycle(
+                        this, cameraSelector, preview, imageCapture, videoCapture, imageAnalyzer)
+                } else {
+                    camera = cameraProvider.bindToLifecycle(
+                        this, cameraSelector, preview, imageCapture, videoCapture)
+                }
 
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
