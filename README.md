@@ -82,6 +82,3 @@ Example prompts:
 
 See `startup.md` for Cloud Run steps.
 
-## License
-
-No license selected yet.
